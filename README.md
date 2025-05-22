@@ -14,7 +14,7 @@ These actions allow players to go to new areas, gain loot and equipment and expe
 The conceptual approach:
 
 ~~**Phase 1:**~~ **Complete!**
-    - ~~Develop character system (character.py)~~
+- ~~Develop character system (character.py)~~
     - ~~Creation and save/loading~~
     - ~~Attribute tracking (max hp based on level * 15, exp to next level baesd on level * 10)~~
     - ~~Exp gain (Including checking for level, auto overflowing exp to next level)~~
