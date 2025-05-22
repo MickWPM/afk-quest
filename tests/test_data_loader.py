@@ -1,107 +1,305 @@
 import pytest
 import os
 import csv
+import configparser # Keep for type hinting and creating real objects in helpers if needed
+from unittest.mock import patch, MagicMock, mock_open # mock_open can be useful for file reads
+import requests # Ensure requests is imported for requests.exceptions
 from src.data_loader import DataLoader
+
+# --- Fixtures for CSV content (remains the same) ---
+VALID_CSV_CONTENT = """name,hp,attack_stat,loot_gold_min,loot_gold_max
+TestGoblin,10,2,1,3
+TestOgre,50,8,10,20
+"""
+EMPTY_CSV_CONTENT_WITH_HEADER = "name,hp,attack_stat,loot_gold_min,loot_gold_max\n"
+MALFORMED_CSV_CONTENT = """name,hp,attack_stat,loot_gold_min,loot_gold_max
+BadDragon,very_high,lots,some,many
+GoodSlime,5,1,0,1
+"""
+MISSING_HEADER_CSV_CONTENT = """name,hp,attack_stat
+NoLootGoblin,10,2
+"""
+
+# --- Helper to configure the MOCKED ConfigParser INSTANCE ---
+def configure_mock_config_instance(mock_config_obj: MagicMock, google_url: str = "", local_fallback: str = "enemies.csv", has_section_val: bool = True):
+    """
+    Configures a MagicMock object to behave like a ConfigParser instance.
+    """
+    def get_side_effect(section, option, fallback=None):
+        if section == "DataSources.Enemies":
+            if option == "google_sheet_url":
+                return google_url
+            if option == "local_csv_fallback":
+                return local_fallback
+        return fallback
+
+    mock_config_obj.has_section.return_value = has_section_val
+    mock_config_obj.get.side_effect = get_side_effect
+    mock_config_obj.read.return_value = None # Mock read to do nothing
 
 @pytest.fixture
 def temp_data_dir(tmp_path):
-    """Creates a temporary data directory for tests."""
-    data_dir = tmp_path / "data"
+    data_dir = tmp_path / "test_data_files"
     data_dir.mkdir()
-    return data_dir
-
-@pytest.fixture
-def valid_enemies_csv_file(temp_data_dir):
-    """Creates a valid enemies.csv file in the temporary data directory."""
-    filepath = temp_data_dir / "enemies_good.csv"
-    with open(filepath, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["name", "hp", "attack_stat", "loot_gold_min", "loot_gold_max"])
-        writer.writerow(["TestGoblin", "10", "2", "1", "3"])
-        writer.writerow(["TestOgre", "50", "8", "10", "20"])
-    return filepath
-
-@pytest.fixture
-def empty_enemies_csv_file(temp_data_dir):
-    """Creates an empty enemies.csv file (only headers)."""
-    filepath = temp_data_dir / "enemies_empty.csv"
-    with open(filepath, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["name", "hp", "attack_stat", "loot_gold_min", "loot_gold_max"])
-    return filepath
-
-@pytest.fixture
-def malformed_enemies_csv_file(temp_data_dir):
-    """Creates a malformed enemies.csv file (bad data type)."""
-    filepath = temp_data_dir / "enemies_malformed.csv"
-    with open(filepath, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["name", "hp", "attack_stat", "loot_gold_min", "loot_gold_max"])
-        writer.writerow(["BadDragon", "very_high", "lots", "some", "many"]) # bad types
-        writer.writerow(["GoodSlime", "5", "1", "0", "1"])
-    return filepath
-
-@pytest.fixture
-def missing_header_csv_file(temp_data_dir):
-    """Creates a CSV file with missing headers."""
-    filepath = temp_data_dir / "enemies_no_header.csv"
-    with open(filepath, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(["name", "hp", "attack_stat"]) # Missing loot headers
-        writer.writerow(["NoLootGoblin", "10", "2"])
-    return filepath
+    mock_config_path = tmp_path / "dummy_config.ini" 
+    return data_dir, mock_config_path
 
 
 class TestDataLoader:
-    def test_load_enemy_definitions_valid_file(self, valid_enemies_csv_file):
-        # DataLoader expects to find 'data' in the CWD, or path specified.
-        # For testing, we point it to the parent of the specific temp file.
-        loader = DataLoader(data_folder_path=str(valid_enemies_csv_file.parent))
-        definitions = loader.load_enemy_definitions(filename=valid_enemies_csv_file.name)
+
+    @patch('src.data_loader.os.path.exists') # Mock os.path.exists
+    @patch('src.data_loader.requests.get')
+    @patch('src.data_loader.configparser.ConfigParser') # Mocks the ConfigParser CLASS
+    def test_load_from_google_sheet_success(self, MockConfigParserClass, mock_requests_get, mock_os_exists, temp_data_dir):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        
+        # Ensure _load_config believes the config file exists so it uses the mocked ConfigParser
+        mock_os_exists.return_value = True 
+
+        mock_config_instance = MockConfigParserClass.return_value 
+        configure_mock_config_instance(mock_config_instance, google_url="http://fakegooglesheet.com/export.csv")
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = VALID_CSV_CONTENT
+        mock_response.headers = {'content-type': 'text/csv'}
+        mock_requests_get.return_value = mock_response
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+
         assert len(definitions) == 2
         assert definitions[0]["name"] == "TestGoblin"
-        assert definitions[0]["hp"] == 10
-        assert definitions[1]["name"] == "TestOgre"
-        assert definitions[1]["loot_gold_max"] == 20
+        mock_requests_get.assert_called_once_with("http://fakegooglesheet.com/export.csv", timeout=10)
+        # Check that os.path.exists was called for the config file path
+        mock_os_exists.assert_any_call(str(mock_config_path_for_init))
 
-    def test_load_enemy_definitions_file_not_found(self, temp_data_dir, capsys):
-        loader = DataLoader(data_folder_path=str(temp_data_dir))
-        definitions = loader.load_enemy_definitions(filename="non_existent.csv")
+    @patch('src.data_loader.os.path.exists')
+    @patch('src.data_loader.requests.get')
+    @patch('src.data_loader.configparser.ConfigParser')
+    def test_load_from_local_csv_fallback_on_sheet_failure(self, MockConfigParserClass, mock_requests_get, mock_os_exists, temp_data_dir, capsys):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        local_csv_name = "fallback_enemies.csv"
+        fallback_csv_path = data_dir / local_csv_name
+        with open(fallback_csv_path, 'w') as f:
+            f.write(VALID_CSV_CONTENT)
+
+        def os_exists_side_effect(path_arg):
+            if path_arg == str(mock_config_path_for_init): return True # Config file "exists"
+            if path_arg == str(fallback_csv_path): return True # Fallback CSV "exists"
+            return False 
+        mock_os_exists.side_effect = os_exists_side_effect
+        
+        mock_config_instance = MockConfigParserClass.return_value
+        configure_mock_config_instance(
+            mock_config_instance,
+            google_url="http://brokenurl.com/export.csv", 
+            local_fallback=local_csv_name
+        )
+
+        mock_requests_get.side_effect = requests.exceptions.RequestException("Network Error")
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+
+        assert len(definitions) == 2
+        assert definitions[0]["name"] == "TestGoblin"
+        captured = capsys.readouterr()
+        assert "Error fetching enemy definitions from Google Sheet" in captured.out
+        assert f"Successfully loaded 2 enemy definitions from: Local CSV ({str(fallback_csv_path)})" in captured.out
+
+    @patch('src.data_loader.os.path.exists')
+    @patch('src.data_loader.configparser.ConfigParser')
+    def test_load_from_local_csv_no_google_url_configured(self, MockConfigParserClass, mock_os_exists, temp_data_dir, capsys):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        local_csv_name = "local_only_enemies.csv"
+        local_csv_path = data_dir / local_csv_name
+        with open(local_csv_path, 'w') as f:
+            f.write(VALID_CSV_CONTENT)
+
+        def os_exists_side_effect(path_arg):
+            if path_arg == str(mock_config_path_for_init): return True
+            if path_arg == str(local_csv_path): return True
+            return False
+        mock_os_exists.side_effect = os_exists_side_effect
+
+        mock_config_instance = MockConfigParserClass.return_value
+        configure_mock_config_instance(mock_config_instance, google_url="", local_fallback=local_csv_name)
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+
+        assert len(definitions) == 2
+        assert definitions[0]["name"] == "TestGoblin" # Corrected: VALID_CSV_CONTENT starts with TestGoblin
+        captured = capsys.readouterr()
+        assert "No Google Sheet URL configured" in captured.out or "Google Sheet URL in config was present but invalid" in captured.out
+        assert f"Successfully loaded 2 enemy definitions from: Local CSV ({str(local_csv_path)})" in captured.out
+
+    @patch('src.data_loader.os.path.exists')
+    @patch('src.data_loader.requests.get')
+    @patch('src.data_loader.configparser.ConfigParser')
+    def test_load_local_csv_file_not_found_after_sheet_fail(self, MockConfigParserClass, mock_requests_get, mock_os_exists, temp_data_dir, capsys):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        
+        def os_exists_side_effect(path_arg):
+            if path_arg == str(mock_config_path_for_init): return True # Config file "exists"
+            # Fallback CSV does not exist
+            if "non_existent_fallback.csv" in str(path_arg): return False 
+            return False # Default to false for other unexpected paths
+        mock_os_exists.side_effect = os_exists_side_effect
+
+        mock_config_instance = MockConfigParserClass.return_value
+        configure_mock_config_instance(
+            mock_config_instance,
+            google_url="http://anotherbrokenurl.com/export.csv",
+            local_fallback="non_existent_fallback.csv"
+        )
+        mock_requests_get.side_effect = requests.exceptions.RequestException("Network Error")
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+
         assert len(definitions) == 0
         captured = capsys.readouterr()
-        assert "Error: Enemy definitions file not found" in captured.out
+        assert "Error fetching enemy definitions from Google Sheet" in captured.out
+        assert "Local fallback enemy definitions file not found" in captured.out
+        assert "Critical Warning: No enemy definitions loaded" in captured.out
 
-    def test_load_enemy_definitions_empty_file(self, empty_enemies_csv_file, capsys):
-        loader = DataLoader(data_folder_path=str(empty_enemies_csv_file.parent))
-        definitions = loader.load_enemy_definitions(filename=empty_enemies_csv_file.name)
+    @patch('src.data_loader.os.path.exists')
+    @patch('src.data_loader.configparser.ConfigParser')
+    def test_load_empty_local_csv_file(self, MockConfigParserClass, mock_os_exists, temp_data_dir, capsys):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        empty_csv_name = "empty_enemies.csv"
+        empty_csv_path = data_dir / empty_csv_name
+        with open(empty_csv_path, 'w') as f:
+            f.write(EMPTY_CSV_CONTENT_WITH_HEADER)
+
+        def os_exists_side_effect(path_arg):
+            if path_arg == str(mock_config_path_for_init): return True
+            if path_arg == str(empty_csv_path): return True
+            return False
+        mock_os_exists.side_effect = os_exists_side_effect
+
+        mock_config_instance = MockConfigParserClass.return_value
+        configure_mock_config_instance(mock_config_instance, google_url="", local_fallback=empty_csv_name)
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+        
         assert len(definitions) == 0
         captured = capsys.readouterr()
-        assert "Warning: No valid enemy definitions loaded" in captured.out
+        assert "Successfully loaded 0 enemy definitions" in captured.out or \
+               "Critical Warning: No enemy definitions loaded" in captured.out
 
-    def test_load_enemy_definitions_malformed_data(self, malformed_enemies_csv_file, capsys):
-        loader = DataLoader(data_folder_path=str(malformed_enemies_csv_file.parent))
-        definitions = loader.load_enemy_definitions(filename=malformed_enemies_csv_file.name)
-        assert len(definitions) == 1 # Only GoodSlime should load
+    @patch('src.data_loader.os.path.exists')
+    @patch('src.data_loader.configparser.ConfigParser')
+    def test_load_malformed_local_csv_data(self, MockConfigParserClass, mock_os_exists, temp_data_dir, capsys):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        malformed_csv_name = "malformed_enemies.csv"
+        malformed_csv_path = data_dir / malformed_csv_name
+        with open(malformed_csv_path, 'w') as f:
+            f.write(MALFORMED_CSV_CONTENT)
+
+        def os_exists_side_effect(path_arg):
+            if path_arg == str(mock_config_path_for_init): return True
+            if path_arg == str(malformed_csv_path): return True
+            return False
+        mock_os_exists.side_effect = os_exists_side_effect
+
+        mock_config_instance = MockConfigParserClass.return_value
+        configure_mock_config_instance(mock_config_instance, google_url="", local_fallback=malformed_csv_name)
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+        
+        assert len(definitions) == 1 
         assert definitions[0]["name"] == "GoodSlime"
         captured = capsys.readouterr()
-        assert "Warning: Skipping row with invalid data type" in captured.out
+        assert "Warning: Skipping row" in captured.out
+        assert "invalid data type" in captured.out
 
-    def test_load_enemy_definitions_missing_headers(self, missing_header_csv_file, capsys):
-        loader = DataLoader(data_folder_path=str(missing_header_csv_file.parent))
-        definitions = loader.load_enemy_definitions(filename=missing_header_csv_file.name)
+    @patch('src.data_loader.os.path.exists')
+    @patch('src.data_loader.configparser.ConfigParser')
+    def test_load_local_csv_missing_headers(self, MockConfigParserClass, mock_os_exists, temp_data_dir, capsys):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        missing_header_csv_name = "missing_header.csv"
+        missing_header_csv_path = data_dir / missing_header_csv_name
+        with open(missing_header_csv_path, 'w') as f:
+            f.write(MISSING_HEADER_CSV_CONTENT)
+
+        def os_exists_side_effect(path_arg):
+            if path_arg == str(mock_config_path_for_init): return True
+            if path_arg == str(missing_header_csv_path): return True
+            return False
+        mock_os_exists.side_effect = os_exists_side_effect
+
+        mock_config_instance = MockConfigParserClass.return_value
+        configure_mock_config_instance(mock_config_instance, google_url="", local_fallback=missing_header_csv_name)
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+        
         assert len(definitions) == 0
         captured = capsys.readouterr()
-        assert "Error: CSV file" in captured.out and "is missing required headers" in captured.out
+        assert "Error: CSV data from" in captured.out and "is missing required headers" in captured.out
 
-    def test_data_loader_nonexistent_data_folder(self, tmp_path, capsys):
-        non_existent_folder = tmp_path / "non_existent_data_folder"
-        loader = DataLoader(data_folder_path=str(non_existent_folder))
-        # This should print a warning during __init__
-        captured = capsys.readouterr() # Capture prints from __init__
-        assert f"Warning: Data folder not found at {str(non_existent_folder)}" in captured.out
-        # Attempting to load should also fail gracefully
-        definitions = loader.load_enemy_definitions(filename="any.csv")
+    @patch('src.data_loader.os.path.isdir') 
+    @patch('src.data_loader.os.path.exists') 
+    def test_data_loader_nonexistent_config_file_warning(self, mock_os_path_exists_for_config, mock_os_path_isdir_for_data, tmp_path, capsys):
+        mock_os_path_isdir_for_data.return_value = True 
+        
+        non_existent_config_file = tmp_path / "truly_non_existent_config.ini"
+        mock_os_path_exists_for_config.side_effect = lambda p: False if p == str(non_existent_config_file) else True
+
+        loader = DataLoader(data_folder_path=str(tmp_path), config_filepath=str(non_existent_config_file))
+        captured_init = capsys.readouterr()
+        
+        expected_abs_config_path = os.path.abspath(str(non_existent_config_file))
+        assert f"Warning: Configuration file not found at {expected_abs_config_path}" in captured_init.out
+
+        definitions = loader.load_enemy_definitions()
         assert len(definitions) == 0
-        captured = capsys.readouterr() # Capture prints from load method
-        assert "Error: Enemy definitions file not found" in captured.out
+        captured_load = capsys.readouterr()
+        assert "No Google Sheet URL configured" in captured_load.out 
+        assert "No local CSV fallback configured" in captured_load.out
+        assert "Critical Warning: No enemy definitions loaded" in captured_load.out
+        mock_os_path_exists_for_config.assert_any_call(str(non_existent_config_file))
+
+    @patch('src.data_loader.os.path.exists')
+    @patch('src.data_loader.requests.get')
+    @patch('src.data_loader.configparser.ConfigParser')
+    def test_google_sheet_http_error_fallback(self, MockConfigParserClass, mock_requests_get, mock_os_exists, temp_data_dir, capsys):
+        data_dir, mock_config_path_for_init = temp_data_dir
+        local_csv_name = "fallback_good.csv"
+        fallback_csv_path = data_dir / local_csv_name
+        with open(fallback_csv_path, 'w') as f:
+            f.write(VALID_CSV_CONTENT)
+
+        def os_exists_side_effect(path_arg):
+            if path_arg == str(mock_config_path_for_init): return True
+            if path_arg == str(fallback_csv_path): return True
+            return False
+        mock_os_exists.side_effect = os_exists_side_effect
+        
+        mock_config_instance = MockConfigParserClass.return_value
+        configure_mock_config_instance(
+            mock_config_instance,
+            google_url="http://errorurl.com/export.csv",
+            local_fallback=local_csv_name
+        )
+        
+        mock_response_error = MagicMock()
+        mock_response_error.status_code = 404
+        mock_response_error.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Client Error")
+        mock_requests_get.return_value = mock_response_error
+
+        loader = DataLoader(data_folder_path=str(data_dir), config_filepath=str(mock_config_path_for_init))
+        definitions = loader.load_enemy_definitions()
+
+        assert len(definitions) == 2
+        assert definitions[0]["name"] == "TestGoblin"
+        captured = capsys.readouterr()
+        assert "Error fetching enemy definitions from Google Sheet" in captured.out
+        assert "404 Client Error" in captured.out
+        assert f"Successfully loaded 2 enemy definitions from: Local CSV ({str(fallback_csv_path)})" in captured.out
 
