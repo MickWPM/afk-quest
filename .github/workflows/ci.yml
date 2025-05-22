@@ -80,7 +80,6 @@ jobs:
         if [ -f bandit_report.txt ]; then
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           # Display the content of the Bandit report.
-          # If Bandit reports can be long, consider showing only a summary or first few lines.
           cat bandit_report.txt >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY # Ensure newline before end of code block
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -92,7 +91,6 @@ jobs:
 
         echo "#### Pytest Results" >> $GITHUB_STEP_SUMMARY
         if [ -f pytest_report.xml ]; then
-            # You could parse the XML for a summary, or just note its availability.
             echo "Pytest XML report (pytest_report.xml) is available in artifacts." >> $GITHUB_STEP_SUMMARY
         else
             echo "Pytest report (pytest_report.xml) not found." >> $GITHUB_STEP_SUMMARY
