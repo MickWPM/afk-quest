@@ -1,6 +1,10 @@
 # afk-quest
 
-Simple RPG to be iteratively developed upon. The intent is for this to provide a little bored afk fun but also serve as a tool to practice development using test frameworks.
+Simple RPG to be iteratively developed upon. The intent is for this to provide a little bored afk fun but also serve as a tool to practice development using test frameworks. Note this application is built under the following paradigm:
+- Plan and architecture developed
+- Class requirements developed and test range defined
+- Gemini AI leveraged to construct main code files and test coverage
+- Code files edited to ensure desired functionality is achieved
 
 ## Concept
 Player creates a character and defines a name. The player chooses options:
