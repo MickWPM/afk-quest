@@ -32,7 +32,7 @@ class EnemyManager:
             return None
 
         try:
-            template = random.choice(self.enemy_templates)
+            template = random.choice(self.enemy_templates)  # nosec B311 - Non-cryptographic use for game mechanics
             return Enemy(
                 name=template["name"],
                 max_hp=template["hp"],

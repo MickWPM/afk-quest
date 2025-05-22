@@ -26,7 +26,7 @@ def start_combat(player: Character, enemy: Enemy):
         # Player's turn
         player_attack_power = player.get_attack_power()
         # Damage is randomized between 0 and attack_power (inclusive of 0 for a "miss" or ineffective hit)
-        player_damage = random.randint(0, player_attack_power)
+        player_damage = random.randint(0, player_attack_power)  # nosec B311 - Non-cryptographic use for game mechanics
 
         if player_damage > 0:
             print(f"{player.name} attacks {enemy.name} for {player_damage} damage!")
@@ -53,7 +53,7 @@ def start_combat(player: Character, enemy: Enemy):
 
         # Enemy's turn
         enemy_attack_power = enemy.attack_stat
-        enemy_damage = random.randint(0, enemy_attack_power)
+        enemy_damage = random.randint(0, enemy_attack_power)    # nosec B311 - Non-cryptographic use for game mechanics
 
         if enemy_damage > 0:
             print(f"{enemy.name} retaliates, attacking {player.name} for {enemy_damage} damage!")

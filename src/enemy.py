@@ -50,7 +50,7 @@ class Enemy:
         """
         if self.loot_gold_max < self.loot_gold_min: # Should not happen with validation
             return self.loot_gold_min
-        return random.randint(self.loot_gold_min, self.loot_gold_max)
+        return random.randint(self.loot_gold_min, self.loot_gold_max)   # nosec B311 - Non-cryptographic use for game mechanics
 
     def get_summary(self) -> str:
         """
