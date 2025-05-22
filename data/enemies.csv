@@ -1,0 +1,6 @@
+name,hp,attack_stat,loot_gold_min,loot_gold_max
+Tiny Goblin,8,1,1,5
+Slime drop,1,1,0,1
+Wolf,10,3,0,0
+Bandit,15,2,5,10
+Spiderling,5,1,0,0
