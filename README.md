@@ -50,11 +50,11 @@ The conceptual approach:
 
 - ~~Add testing for introduced logic~~
 
-**Phase 2b** _In Progress_
-- Already reading data locally; offload to publicly viewable google sheets instance.
-- Update test suite to cover the amended load functionality including increased scope
+~~**Phase 2b**~~ **Complete!** 
+- ~~Already reading data locally; offload to publicly viewable google sheets instance.~~
+- ~~Update test suite to cover the amended load functionality including increased scope~~
 
-**Phase 3:**
+**Phase 3:** _Pending_
 - Itemisation update
     - Weapon, item and armour functionality developed (weapon adds dmg when getting attack value, armour provides dmg reduction during on damage calculations, item functionlaity intent is to support epxloration activities (eg. a rope to climb down into an area for unique loot) and potential other effects (eg. regen 1hp every 3 combat rounds) - No item functionlity is implemented in this update)
     - Item equipping logic implemented. If weapon is equipped over an existing weapon, the replaced item is "cashed in". Likewise if a loot item is not equipped, it is "cashed in" based on the item value.
