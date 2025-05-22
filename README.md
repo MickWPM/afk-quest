@@ -52,6 +52,7 @@ The conceptual approach:
 
 **Phase 2b** _In Progress_
 - Already reading data locally; offload to publicly viewable google sheets instance.
+- Update test suite to cover the amended load functionality including increased scope
 
 **Phase 3:**
 - Itemisation update
