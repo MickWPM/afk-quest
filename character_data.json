@@ -1,0 +1,13 @@
+{
+    "name": "Bob",
+    "level": 1,
+    "current_experience": 4,
+    "current_hp": 0,
+    "gold": 4,
+    "equipment": {
+        "weapon": null,
+        "armour": null,
+        "item": null
+    },
+    "base_attack_stat": 1
+}
