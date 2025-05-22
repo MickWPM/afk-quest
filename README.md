@@ -12,23 +12,39 @@ Player creates a character and defines a name. The player chooses options:
 These actions allow players to go to new areas, gain loot and equipment and experience.
 
 The conceptual approach:
+
 ~~**Phase 1:**~~ **Complete!**
+
 ~~- Develop character system (character.py)~~
+
 ~~-- Creation and save/loading~~
+
 ~~-- Attribute tracking (max hp based on level * 15, exp to next level baesd on level * 10)~~
+
 ~~-- Exp gain (Including checking for level, auto overflowing exp to next level)~~
+
 ~~-- Damage (Deducting damage from hp, Checking for death and flagging it)~~
+
 ~~-- Healing (negative damage)~~
+
 ~~-- Equipment slots (gold count - functional, Weapon, Armour, Item - All are None for now)~~
+
 ~~-- Character summary (Name, Level, Gold, Equipment)~~
 
+
 ~~- Game loop (game.py)~~
+
 ~~-- Auto load character from file (if it exists)~~
+
 ~~-- Give user option to continue or start a new character (continue not available if no existing character)~~
+
 ~~-- Allow user to add exp, damage character, heal character, add gold. After each interaction, report player summary~~
+
 ~~-- Allow user to quit - on quit, save character to file~~
 
+
 ~~- Develop test framework~~
+
 ~~-- Testing all points above for character~~
 
 **Phase 2:**
