@@ -34,17 +34,20 @@ The conceptual approach:
 - ~~Develop test framework~~
     - ~~Testing all points above for character~~
 
-**Phase 2:**
-- Combat update
-    - Allow character to look for a fight
-    - Enemy (enemy.py) includes hp, attack, loot table. Enemy also includes damage application methods and is dead check.
-    - Enemy encounter drawn from a master manager (enemy_manager.py) - This should be initialised within each zone instance and accessed through the zone object.
-    - Player class updated to have attack stat (Check if weapon exists, if not fallback is 1dmg with fists - in this case weapon will always be None so it will always fall back to fists. No logic required for weapons yet)
-    - Player class updated to consider armour in damage function. No armour exists yet so if armour is None, fallback is 0 damage reduction. No logic required for armour yet, stop after checking none and returning the 0 reduction.
-    - Combat auto resolved. Each round the damage is randomised between 0 and damage and applied to both enemy and player. Each round results is presented to player, subsequent round does not occur until player presses enter. No option to flee.
-    - If enemy dies, loot is randomised (implementation TBC). If player dies, player death screen is displayed.
+~~**Phase 2:**~~ **Complete!**
+- ~~Combat update~~
+    - ~~Allow character to look for a fight~~
+    - ~~Enemy (enemy.py) includes hp, attack, loot table. Enemy also includes damage application methods and is dead check.~~
+    - ~~Enemy encounter drawn from a master manager (enemy_manager.py) - This should be initialised within each zone instance and accessed through the zone object.~~
+    - ~~Player class updated to have attack stat (Check if weapon exists, if not fallback is 1dmg with fists - in this case weapon will always be None so it will always fall back to fists. No logic required for weapons yet)~~
+    - ~~Player class updated to consider armour in damage function. No armour exists yet so if armour is None, fallback is 0 damage reduction. No logic required for armour yet, stop after checking none and returning the 0 reduction.~~
+    - ~~Combat auto resolved. Each round the damage is randomised between 0 and damage and applied to both enemy and player. Each round results is presented to player, subsequent round does not occur until player presses enter. No option to flee.~~
+    - ~~If enemy dies, loot is randomised (implementation TBC). If player dies, player death screen is displayed.~~
 
-- Add testing for introduced logic
+- ~~Add testing for introduced logic~~
+
+**Phase 2b** _In Progress_
+- Already reading data locally; offload to publicly viewable google sheets instance.
 
 **Phase 3:**
 - Itemisation update
