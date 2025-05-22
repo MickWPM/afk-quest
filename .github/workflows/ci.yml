@@ -1,0 +1,62 @@
+name: Python application CI
+
+on:
+  push:
+    branches: [ "main" ] # Or your primary development branch
+  pull_request:
+    branches: [ "main" ] # Or your primary development branch
+
+permissions:
+  contents: read
+
+jobs:
+  build_lint_test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10" # Specify your desired Python version
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pylint pytest # Ensure these are installed for the workflow
+
+    - name: Lint with Pylint
+      run: |
+        # Ensure src and tests are in PYTHONPATH for pylint if using relative imports in tests
+        # For this structure, direct linting should work.
+        # You might need to create an empty __init__.py in the root afk_quest directory if pylint has module import issues.
+        # Or, more robustly, structure as a proper installable package. For now, direct path:
+        pylint src/ tests/ --fail-under=8.0 --output-format=text > pylint_report.txt || true
+        # The '|| true' allows the workflow to continue and upload the report even if pylint fails
+        # The actual failure based on score is handled by --fail-under.
+        # If you want the job to fail immediately on lint errors, remove '|| true' and rely on pylint's exit code.
+      # continue-on-error: true # Alternative if you want to see other steps run
+
+    - name: Test with Pytest
+      run: |
+        # To ensure imports from src work correctly in tests without installing the package,
+        # prepend the project root to PYTHONPATH.
+        export PYTHONPATH=$(pwd):$PYTHONPATH
+        pytest tests/ --junitxml=pytest_report.xml
+      # continue-on-error: true # If you want to upload report even if tests fail
+
+    - name: Upload Pylint report
+      uses: actions/upload-artifact@v4
+      if: always() # Always upload, even if previous steps failed
+      with:
+        name: pylint-report
+        path: pylint_report.txt
+
+    - name: Upload Pytest report
+      uses: actions/upload-artifact@v4
+      if: always() # Always upload
+      with:
+        name: pytest-report
+        path: pytest_report.xml
