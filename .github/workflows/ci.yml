@@ -2,61 +2,120 @@ name: Python application CI
 
 on:
   push:
-    branches: [ "main" ] # Or your primary development branch
+    branches: [ "main" ] 
   pull_request:
-    branches: [ "main" ] # Or your primary development branch
+    branches: [ "main" ] # Runs when a PR is opened/updated targeting main
+  workflow_dispatch: # Allows manual triggering from the Actions tab
 
 permissions:
   contents: read
 
 jobs:
-  build_lint_test:
+  build_lint_test_security: 
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.10" # Specify your desired Python version
+        python-version: "3.10" 
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pylint pytest # Ensure these are installed for the workflow
+        # Add bandit to the list of installed packages
+        pip install pylint pytest bandit
 
     - name: Lint with Pylint
       run: |
-        # Ensure src and tests are in PYTHONPATH for pylint if using relative imports in tests
-        # For this structure, direct linting should work.
-        # You might need to create an empty __init__.py in the root afk_quest directory if pylint has module import issues.
-        # Or, more robustly, structure as a proper installable package. For now, direct path:
-        pylint src/ tests/ --fail-under=8.0 --output-format=text > pylint_report.txt || true
-        # The '|| true' allows the workflow to continue and upload the report even if pylint fails
+        # Run pylint. The '|| true' allows the workflow to continue and upload the report
+        # even if pylint finds issues and exits with an error code.
         # The actual failure based on score is handled by --fail-under.
-        # If you want the job to fail immediately on lint errors, remove '|| true' and rely on pylint's exit code.
-      # continue-on-error: true # Alternative if you want to see other steps run
+        pylint src/ tests/ --fail-under=8.0 --output-format=text > pylint_report.txt || true
+        echo "Pylint scan complete. Report generated: pylint_report.txt"
+
+    - name: Security Scan with Bandit
+      run: |
+        # Run bandit recursively on the src directory.
+        # -f txt specifies text output format.
+        # -o bandit_report.txt specifies the output file.
+        # '|| true' ensures the workflow continues to upload the report even if Bandit finds issues.
+        # Remove '|| true' if you want the job to fail immediately when Bandit finds issues.
+        bandit -r src/ -f txt -o bandit_report.txt || true
+        echo "Bandit security scan complete. Report generated: bandit_report.txt"
 
     - name: Test with Pytest
       run: |
-        # To ensure imports from src work correctly in tests without installing the package,
-        # prepend the project root to PYTHONPATH.
+        # Prepend the project root to PYTHONPATH to ensure imports from src work correctly in tests.
         export PYTHONPATH=$(pwd):$PYTHONPATH
         pytest tests/ --junitxml=pytest_report.xml
-      # continue-on-error: true # If you want to upload report even if tests fail
+        echo "Pytest execution complete. Report generated: pytest_report.xml"
+
+    - name: Create Job Summary
+      # This step runs even if previous steps (like linting or tests) fail,
+      # ensuring a summary is always available.
+      if: always()
+      run: |
+        echo "### CI Run Summary :gear:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY # New line for spacing
+
+        echo "#### Pylint Results" >> $GITHUB_STEP_SUMMARY
+        if [ -f pylint_report.txt ]; then
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          # Show the first 20 lines of the Pylint report in the summary
+          head -n 20 pylint_report.txt >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY # Ensure newline before end of code block
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "Full Pylint report is available in artifacts." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Pylint report (pylint_report.txt) not found." >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY # Spacing
+
+        echo "#### Bandit Security Scan Results" >> $GITHUB_STEP_SUMMARY
+        if [ -f bandit_report.txt ]; then
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          # Display the content of the Bandit report.
+          # If Bandit reports can be long, consider showing only a summary or first few lines.
+          cat bandit_report.txt >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY # Ensure newline before end of code block
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "Full Bandit security report is available in artifacts." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Bandit report (bandit_report.txt) not found." >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY # Spacing
+
+        echo "#### Pytest Results" >> $GITHUB_STEP_SUMMARY
+        if [ -f pytest_report.xml ]; then
+            # You could parse the XML for a summary, or just note its availability.
+            echo "Pytest XML report (pytest_report.xml) is available in artifacts." >> $GITHUB_STEP_SUMMARY
+        else
+            echo "Pytest report (pytest_report.xml) not found." >> $GITHUB_STEP_SUMMARY
+        fi
 
     - name: Upload Pylint report
+      # This step runs even if previous steps fail, to ensure reports are always uploaded.
+      if: always()
       uses: actions/upload-artifact@v4
-      if: always() # Always upload, even if previous steps failed
       with:
         name: pylint-report
         path: pylint_report.txt
 
-    - name: Upload Pytest report
+    - name: Upload Bandit security report
+      if: always()
       uses: actions/upload-artifact@v4
-      if: always() # Always upload
+      with:
+        name: bandit-security-report
+        path: bandit_report.txt # Ensure this path matches the output file from the bandit command
+
+    - name: Upload Pytest report
+      if: always()
+      uses: actions/upload-artifact@v4
       with:
         name: pytest-report
         path: pytest_report.xml
