@@ -1,9 +1,9 @@
 {
-    "name": "Bob",
+    "name": "bob",
     "level": 1,
-    "current_experience": 4,
+    "current_experience": 2,
     "current_hp": 0,
-    "gold": 4,
+    "gold": 0,
     "equipment": {
         "weapon": null,
         "armour": null,
